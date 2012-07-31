@@ -25,42 +25,25 @@
   include_recipe requirement
 end
 
-# There are problems deploying on Redhat provided rubies.
-# We'll use Fletcher Nichol's slick ruby_build cookbook to compile a Ruby.
-if node['gitlab']['install_ruby'] !~ /package/
-  ruby_build_ruby node['gitlab']['install_ruby'] 
+# # There are problems deploying on Redhat provided rubies.
+# # We'll use Fletcher Nichol's slick ruby_build cookbook to compile a Ruby.
+# if node['gitlab']['install_ruby'] !~ /package/
+#   ruby_build_ruby node['gitlab']['install_ruby']
 
-  # Drop off a profile script.
-  template "/etc/profile.d/gitlab.sh" do
-    owner "root"
-    group "root"
-    mode 0755
-  end
+#   # Drop off a profile script.
+#   template "/etc/profile.d/gitlab.sh" do
+#     owner "root"
+#     group "root"
+#     mode 0755
+#   end
 
-  # Set PATH for remainder of recipe.
-  ENV['PATH'] = "/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin:/usr/local/ruby/#{node['gitlab']['install_ruby']}/bin"
-end
+#   # Set PATH for remainder of recipe.
+#   ENV['PATH'] = "/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin:/usr/local/ruby/#{node['gitlab']['install_ruby']}/bin"
+# end
 
 # Install required packages for Gitlab
 node['gitlab']['packages'].each do |pkg|
   package pkg
-end
-
-# Install sshkey gem into chef
-chef_gem "sshkey" do
-  action :install
-end
-
-# Install required Ruby Gems for Gitlab
-%w{ charlock_holmes bundler }.each do |gempkg|
-  gem_package gempkg do
-    action :install
-  end
-end
-
-# Install pygments from pip
-python_pip "pygments" do
-  action :install
 end
 
 # Add the gitlab user
@@ -90,20 +73,48 @@ directory "#{node['gitlab']['home']}/.ssh" do
   mode 0700
 end
 
+# Install sshkey gem into chef
+chef_gem "sshkey" do
+  action :install
+end
+
+# install Ruby
+rbenv_ruby "1.9.3-p194"
+rbenv_global "1.9.3-p194"
+
+# Install required Ruby Gems for Gitlab
+%w{ charlock_holmes bundler }.each do |gempkg|
+  rbenv_gem gempkg do
+    action :install
+  end
+end
+
+package "python-setuptools"
+
+# easy_install
+easy_install_package "Pygments" do
+  action :install
+end
+# cookbook 'pygments'
+# # Install pygments from pip
+# python_pip "pygments" do
+#   action :install
+# end
+
 # Generate and deploy ssh public/private keys
 Gem.clear_paths
 require 'sshkey'
 gitlab_sshkey = SSHKey.generate(:type => 'RSA', :comment => "#{node['gitlab']['user']}@#{node['fqdn']}")
 node.set_unless['gitlab']['public_key'] = gitlab_sshkey.ssh_public_key
 
-# Save public_key to node, unless it is already set.
-ruby_block "save node data" do
-  block do
-    node.save
-  end
-  not_if { Chef::Config[:solo] }
-  action :create
-end
+# # Save public_key to node, unless it is already set.
+# ruby_block "save node data" do
+#   block do
+#     node.save
+#   end
+#   not_if { Chef::Config[:solo] }
+#   action :create
+# end
 
 # Render private key template
 template "#{node['gitlab']['home']}/.ssh/id_rsa" do
@@ -174,8 +185,8 @@ link "#{node['gitlab']['app_home']}/config/database.yml" do
 end
 
 # Install Gems with bundle install
-execute "gitlab-bundle-install" do
-  command "bundle install --without development test --deployment"
+rbenv_script "gitlab-bundle-install" do
+  code "bundle install --without development test --deployment"
   cwd node['gitlab']['app_home']
   user node['gitlab']['user']
   group node['gitlab']['group']
@@ -184,10 +195,10 @@ execute "gitlab-bundle-install" do
 end
 
 # Setup sqlite database for Gitlab
-execute "gitlab-bundle-rake" do
-  command "bundle exec rake gitlab:app:setup RAILS_ENV=production"
+rbenv_script "gitlab-bundle-rake" do
+  code "bundle exec rake gitlab:app:setup RAILS_ENV=production"
   cwd node['gitlab']['app_home']
-  user node['gitlab']['user'] 
+  user node['gitlab']['user']
   group node['gitlab']['group']
   not_if { File.exists?("#{node['gitlab']['app_home']}/db/production.sqlite3") }
 end

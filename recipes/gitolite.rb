@@ -24,9 +24,9 @@ end
 # Add git user
 # Password isn't set correctly in original recipe, and really no reason to set one.
 user node['gitlab']['git_user'] do
-  comment "Git User" 
+  comment "Git User"
   home node['gitlab']['git_home']
-  shell "/bin/bash" 
+  shell "/bin/bash"
   supports :manage_home => true
 end
 
@@ -73,5 +73,5 @@ template "#{node['gitlab']['git_home']}/.gitolite.rc" do
   source "gitolite.rc.erb"
   owner node['gitlab']['git_user']
   group node['gitlab']['git_group']
-  mode 0644 
+  mode 0644
 end
